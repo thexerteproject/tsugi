@@ -194,6 +194,6 @@ $CONTEXT = false;
 $LINK = false;
 
 if (!defined('TSUGI_VERSION')) {
-    define('TSUGI_VERSION', '2025.12');   // ← update this occasionally
+    define('TSUGI_VERSION', 'php-72-x xerte');   // ← update this occasionally
 }
 // No trailer
