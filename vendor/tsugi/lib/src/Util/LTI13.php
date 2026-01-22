@@ -455,6 +455,8 @@ class LTI13 {
         if ( is_array($debug_log) ) $debug_log[] = $headers;
         if ( is_array($debug_log) ) $debug_log[] = $grade_call;
 
+        self::setUserAgentCurl($ch); // Set the User-Agent header
+
         $line_item = curl_exec($ch);
         if ( $line_item === false ) return self::handle_curl_error($ch, $debug_log);
 
@@ -511,6 +513,8 @@ class LTI13 {
 
             if ( is_array($debug_log) ) $debug_log[] = $membership_url;
             if ( is_array($debug_log) ) $debug_log[] = $headers;
+
+            self::setUserAgentCurl($ch); // Set the User-Agent header
 
             $membership = curl_exec($ch);
             if ( $membership === false ) return self::handle_curl_error($ch, $debug_log);
@@ -574,6 +578,108 @@ class LTI13 {
         }
     }
 
+
+    /**
+     * Load the groups if we can get them from the LMS
+     *
+     * @param string $context_groups_url The REST endpoint for memberships
+     * @param $access_token The access token for this request
+     * @param array $debug_log If this is an array, debug information is returned as the
+     * process progresses.
+     *
+     * @return mixed If this works it returns the NRPS object.  If it fails,
+     * it returns a string.
+     */
+    public static function loadGroups($context_groups_url, $access_token, &$debug_log=false) {
+
+        $return_array = null;
+
+        $context_groups_url = trim($context_groups_url);
+
+        // Handle paging
+        while(1) {
+            if ( is_array($debug_log) ) $debug_log[] = 'Loading: ' . $context_groups_url;
+
+            $ch = curl_init();
+
+            $headers = [
+                'Authorization: Bearer '. $access_token,
+                'Accept: '.self::MEDIA_TYPE_GROUPS,
+                'Content-Type: '.self::MEDIA_TYPE_GROUPS
+            ];
+
+            curl_setopt($ch, CURLOPT_URL, $context_groups_url);
+            curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+            curl_setopt($ch, CURLOPT_HEADER, true); // Ask for headers in the return data
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+
+            if ( is_array($debug_log) ) $debug_log[] = $context_groups_url;
+            if ( is_array($debug_log) ) $debug_log[] = $headers;
+
+            self::setUserAgentCurl($ch); // Set the User-Agent header
+
+            $lti_groups = curl_exec($ch);
+            if ( $lti_groups === false ) return self::handle_curl_error($ch, $debug_log);
+
+            $httpcode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            $headerSize = curl_getinfo($ch , CURLINFO_HEADER_SIZE );
+            curl_close ($ch);
+            if ( is_array($debug_log) ) $debug_log[] = "Sent groups request, received status=$httpcode (".U::strlen($lti_groups)." characters)";
+
+            if ( empty($lti_groups) ) {
+                return "No data retrieved status=" . $httpcode;
+            }
+
+            $headerStr = substr( $lti_groups , 0 , $headerSize );
+            $lti_groups = substr( $lti_groups , $headerSize );
+            $response_headers = Net::parseHeaders($headerStr);
+
+            if (is_array($debug_log) ) $debug_log[] = $response_headers;
+
+            $nextUrl = null;
+            $link_header = U::get($response_headers, 'Link', null);
+            if ( is_string($link_header) ) {
+                if ( is_array($debug_log) ) $debug_log[] = 'Link header: ' . $link_header;
+                $linkHeader = LinkHeader::fromString($link_header);
+                $nextRel = is_object($linkHeader) ? $linkHeader->getRel('next') : null;
+                $nextUrl = is_object($nextRel) ? $nextRel->getUri() : null;
+            }
+
+            $json = json_decode($lti_groups, false);   // Top level object
+            if ( $json === null ) {
+                $retval = "Unable to parse returned groups JSON:". json_last_error_msg();
+                if ( is_array($debug_log) ) {
+                    if (is_array($debug_log) ) $debug_log[] = $retval;
+                    if (is_array($debug_log) ) $debug_log[] = substr($lti_groups, 0, 3000);
+                }
+                return $retval;
+            }
+
+            if ( Net::httpSuccess($httpcode) && isset($json->groups) ) {
+                if ( is_array($debug_log) ) $debug_log[] = "Loaded ".count($json->groups)." groups entries";
+                if ( $return_array == null ) {
+                    $return_array = $json;
+                } else {
+                    $return_array->groups = array_merge($return_array->groups, $json->groups);
+                }
+                if ( $nextUrl == null ) {
+                    if ( is_array($debug_log) ) $debug_log[] = "Returning ".count($return_array->groups)." groups entries";
+                    return $return_array;
+                }
+                if ( is_array($debug_log) ) $debug_log[] = 'Retrieving Next URL: ' . $nextUrl;
+                $context_groups_url = trim($nextUrl);
+                continue;
+            }
+
+            $status = isset($json->error) ? $json->error : "Unable to load results";
+            if ( is_array($debug_log) ) {
+                $debug_log[] = "Error status: $status";
+                if (is_array($debug_log) ) $debug_log[] = substr($lti_groups, 0, 3000);
+            }
+            return $status;
+        }
+    }
+
     /**
      * Load our lineitems from the LMS
      *
@@ -601,6 +707,8 @@ class LTI13 {
 
         if (is_array($debug_log) ) $debug_log[] = 'Line Items URL: '.$lineitems_url;
         if (is_array($debug_log) ) $debug_log[] = $headers;
+
+        self::setUserAgentCurl($ch); // Set the User-Agent header
 
         $lineitems = curl_exec($ch);
         if ( $lineitems === false ) return self::handle_curl_error($ch, $debug_log);
@@ -653,6 +761,8 @@ class LTI13 {
 
         if (is_array($debug_log) ) $debug_log[] = 'Line Items URL: '.$lineitem_url;
         if (is_array($debug_log) ) $debug_log[] = $headers;
+
+        self::setUserAgentCurl($ch); // Set the User-Agent header
 
         $lineitem = curl_exec($ch);
         if ( $lineitem === false ) return self::handle_curl_error($ch, $debug_log);
@@ -710,6 +820,8 @@ class LTI13 {
 
         if (is_array($debug_log) ) $debug_log[] = 'Line Items URL: '.$actual_url;
         if (is_array($debug_log) ) $debug_log[] = $headers;
+
+        self::setUserAgentCurl($ch); // Set the User-Agent header
 
         $results = curl_exec($ch);
         if ( $results === false ) return self::handle_curl_error($ch, $debug_log);
@@ -771,6 +883,8 @@ class LTI13 {
 
         if (is_array($debug_log) ) $debug_log[] = 'Line Item URL: '.$lineitem_url;
         if (is_array($debug_log) ) $debug_log[] = $headers;
+
+        self::setUserAgentCurl($ch); // Set the User-Agent header
 
         $response = curl_exec($ch);
         if ( $response === false ) return self::handle_curl_error($ch, $debug_log);
@@ -840,6 +954,8 @@ class LTI13 {
         if (is_array($debug_log) ) $debug_log[] = 'Line Items URL: '.$lineitems_url;
         if (is_array($debug_log) ) $debug_log[] = $headers;
 
+        self::setUserAgentCurl($ch); // Set the User-Agent header
+
         $line_item = curl_exec($ch);
         if ( $line_item === false ) return self::handle_curl_error($ch, $debug_log);
 
@@ -908,6 +1024,8 @@ class LTI13 {
 
         if (is_array($debug_log) ) $debug_log[] = 'Line Item URL: '.$lineitem_url;
         if (is_array($debug_log) ) $debug_log[] = $headers;
+
+        self::setUserAgentCurl($ch); // Set the User-Agent header
 
         $line_item = curl_exec($ch);
         if ( $line_item === false ) return self::handle_curl_error($ch, $debug_log);
@@ -991,6 +1109,8 @@ class LTI13 {
         if ( is_array($debug_log) ) $debug_log[] = $auth_request;
         if ( is_array($debug_log) ) $debug_log[] = "Post Data:";
         if ( is_array($debug_log) ) $debug_log[] = $query;
+
+        self::setUserAgentCurl($ch); // Set the User-Agent header
 
         $token_str = curl_exec($ch);
         if ( $token_str === false ) {
@@ -1345,4 +1465,19 @@ class LTI13 {
         return null;
     }
 
+    public static function setUserAgentCurl($ch)
+    {
+        global $CFG;
+
+        // Construct a robust default User-Agent
+        $default_agent = 'Tsugi/' .
+            (defined('TSUGI_VERSION') ? TSUGI_VERSION : 'dev') .
+            ' (' . (isset($CFG->wwwroot) ? $CFG->wwwroot : 'https://www.tsugi.org') . ')' .
+            ' PHP/' . phpversion();
+
+        // Allow overrides via extension mechanism
+        $user_agent = $CFG->getExtension('user_agent', $default_agent);
+
+        curl_setopt($ch, CURLOPT_USERAGENT, $user_agent);
+    }
 }
