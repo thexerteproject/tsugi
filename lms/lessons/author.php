@@ -90,8 +90,12 @@ $OUTPUT->header();
 $OUTPUT->bodyStart();
 $OUTPUT->topNav();
 $OUTPUT->flashMessages();
-
 ?>
+<span style="position: fixed; right: 10px; top: 75px; z-index: 999; background-color: white; padding: 2px;">
+    <a href="index.php" class="btn btn-default" id="back-to-lessons-btn">
+        <span class="glyphicon glyphicon-arrow-left"></span> Back to Lessons
+    </a>
+</span>
 <style>
 .lesson-author {
     max-width: 1400px;
@@ -246,6 +250,22 @@ $OUTPUT->flashMessages();
     border-color: #1e7e34;
 }
 
+.btn-icon {
+    padding: 6px 10px;
+    min-width: 32px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    background: white;
+    color: #333;
+    border-color: #ccc;
+}
+
+.btn-icon:hover {
+    background: #f0f0f0;
+}
+
 .module-body {
     padding: 20px;
     display: block;
@@ -357,6 +377,43 @@ $OUTPUT->flashMessages();
     margin: 0;
     flex: 1;
     margin-left: 10px;
+}
+
+.item.header-item {
+    background: #f8f9fa;
+    border-left: 3px solid #007bff;
+}
+
+.header-toggle {
+    cursor: pointer;
+    color: #666;
+    font-size: 14px;
+    padding: 4px 8px;
+    border: none;
+    background: transparent;
+    user-select: none;
+    display: inline-flex;
+    align-items: center;
+    transition: transform 0.2s ease;
+    margin-right: 8px;
+}
+
+.header-toggle:hover {
+    color: #333;
+}
+
+.header-toggle.collapsed {
+    transform: rotate(-90deg);
+}
+
+.header-toggle::before {
+    content: "▼";
+    font-size: 12px;
+}
+
+.item.collapsed-section {
+    display: none !important;
+    /* Hide from sortable as well - these items won't be draggable when collapsed */
 }
 
 .item-actions {
@@ -582,7 +639,9 @@ $OUTPUT->flashMessages();
     </div>
 
     <div class="add-module-btn">
-        <button class="btn btn-primary" onclick="addModule()">+ Add Module</button>
+        <button class="btn btn-icon" onclick="addModule()" title="Add Module">
+            <i class="fa fa-plus"></i>
+        </button>
     </div>
 </div>
 
@@ -620,9 +679,29 @@ let lessonsData = <?= json_encode($lessons_data, JSON_PRETTY_PRINT | JSON_UNESCA
 let hasChanges = false;
 let editingItemIndex = null;
 let editingModuleIndex = null;
+let editingAfterItemIndex = null;
+
+// Migrate FCPX to reference for video items
+function migrateFCPXToReference() {
+    if (!lessonsData.modules || !Array.isArray(lessonsData.modules)) {
+        return;
+    }
+    
+    lessonsData.modules.forEach(module => {
+        if (module.items && Array.isArray(module.items)) {
+            module.items.forEach(item => {
+                if (item.type === 'video' && item.FCPX && !item.reference) {
+                    item.reference = item.FCPX;
+                    delete item.FCPX;
+                }
+            });
+        }
+    });
+}
 
 // Initialize
 $(document).ready(function() {
+    migrateFCPXToReference();
     renderModules();
     setupSortable();
     
@@ -806,7 +885,7 @@ function renderModules() {
             }
         });
         
-        // Restore collapsed state from localStorage
+        // Restore collapsed state from localStorage for modules
         const stateKey = `module_${moduleIndex}_collapsed`;
         if (localStorage.getItem(stateKey) === 'true') {
             const moduleBody = moduleContainer.find('.module-body');
@@ -814,9 +893,50 @@ function renderModules() {
             moduleBody.addClass('collapsed');
             toggleButton.addClass('collapsed');
         }
+        
+        // Apply header section collapsed states
+        applyHeaderSectionStates(moduleIndex);
     });
     
     setupSortable();
+}
+
+/**
+ * Applies collapsed states to header sections based on localStorage
+ */
+function applyHeaderSectionStates(moduleIndex) {
+    const itemsList = $(`.items-list[data-module-index="${moduleIndex}"]`);
+    const items = itemsList.find('.item').toArray();
+    
+    // First, remove all collapsed-section classes to start fresh
+    // This prevents items from getting stuck in hidden state
+    items.forEach((itemElement) => {
+        $(itemElement).removeClass('collapsed-section');
+    });
+    
+    // Then apply collapsed states
+    items.forEach((itemElement, index) => {
+        const $item = $(itemElement);
+        const itemIndex = parseInt($item.attr('data-item-index'));
+        const stateKey = `header_${moduleIndex}_${itemIndex}_collapsed`;
+        const isCollapsed = localStorage.getItem(stateKey) === 'true';
+        
+        if (isCollapsed) {
+            // Find all items after this header until the next header or end
+            for (let i = index + 1; i < items.length; i++) {
+                const $nextItem = $(items[i]);
+                const nextItemData = $nextItem.data('item-object');
+                
+                // Stop at next header
+                if (nextItemData && nextItemData.type === 'header') {
+                    break;
+                }
+                
+                // Mark as collapsed section
+                $nextItem.addClass('collapsed-section');
+            }
+        }
+    });
 }
 
 function createModuleHtml(module, moduleIndex) {
@@ -837,8 +957,12 @@ function createModuleHtml(module, moduleIndex) {
                     </h3>
                 </div>
                 <div class="module-actions">
-                    <button class="btn" onclick="editModule(${moduleIndex})">Edit</button>
-                    <button class="btn btn-danger" onclick="deleteModule(${moduleIndex})">Delete</button>
+                    <button class="btn btn-icon" onclick="editModule(${moduleIndex})" title="Edit Module">
+                        <i class="fa fa-pencil"></i>
+                    </button>
+                    <button class="btn btn-icon" onclick="deleteModule(${moduleIndex})" title="Delete Module">
+                        <i class="fa fa-trash"></i>
+                    </button>
                 </div>
             </div>
             <div class="module-body">
@@ -847,7 +971,9 @@ function createModuleHtml(module, moduleIndex) {
                     ${itemsHtml}
                 </div>
                 <div class="add-item-btn">
-                    <button class="btn btn-primary" onclick="addItem(${moduleIndex})">+ Add Item</button>
+                    <button class="btn btn-icon" onclick="addItem(${moduleIndex})" title="Add Item">
+                        <i class="fa fa-plus"></i>
+                    </button>
                 </div>
             </div>
         </div>
@@ -871,16 +997,28 @@ function createItemHtml(item, moduleIndex, itemIndex) {
     const title = getItemTitle(item);
     const isHeader = type === 'header';
     
+    // Check if this header section is collapsed
+    const stateKey = `header_${moduleIndex}_${itemIndex}_collapsed`;
+    const isCollapsed = localStorage.getItem(stateKey) === 'true';
+    
     return `
-        <div class="item" data-module-index="${moduleIndex}" data-item-index="${itemIndex}">
+        <div class="item ${isHeader ? 'header-item' : ''}" data-module-index="${moduleIndex}" data-item-index="${itemIndex}">
             <span class="drag-handle" title="Drag to reorder"></span>
             <div class="item-content">
                 <div class="item-header">
+                    ${isHeader ? `<button class="header-toggle ${isCollapsed ? 'collapsed' : ''}" onclick="toggleHeaderSection(${moduleIndex}, ${itemIndex}, event)" title="Expand/Collapse section"></button>` : ''}
                     ${!isHeader ? `<span class="item-type ${type}" aria-label="${type}" title="${type}"><i class="fa ${getItemTypeIcon(type)}"></i></span>` : ''}
                     <span class="item-title">${escapeHtml(title)}</span>
                     <div class="item-actions">
-                        <button class="btn edit-item-btn">Edit</button>
-                        <button class="btn btn-danger delete-item-btn">Delete</button>
+                        ${isHeader ? `<button class="btn btn-icon add-item-after-btn" onclick="addItemAfter(${moduleIndex}, ${itemIndex})" title="Add item after this header">
+                            <i class="fa fa-plus"></i>
+                        </button>` : ''}
+                        <button class="btn btn-icon edit-item-btn" title="Edit Item">
+                            <i class="fa fa-pencil"></i>
+                        </button>
+                        <button class="btn btn-icon delete-item-btn" title="Delete Item">
+                            <i class="fa fa-trash"></i>
+                        </button>
                     </div>
                 </div>
             </div>
@@ -980,6 +1118,35 @@ function setupSortable() {
         placeholder: 'ui-sortable-placeholder',
         tolerance: 'pointer',
         connectWith: '.items-list',
+        receive: function(event, ui) {
+            // When an item is received (dropped) into a new list, check if it's in a collapsed section
+            const $droppedItem = ui.item;
+            const $itemsList = $(this);
+            const moduleIndex = parseInt($itemsList.attr('data-module-index'));
+            
+            // Find the header that this item is now under
+            const allItems = $itemsList.find('.item').toArray();
+            const droppedIndex = allItems.indexOf($droppedItem[0]);
+            
+            // Look backwards to find the nearest header
+            for (let i = droppedIndex - 1; i >= 0; i--) {
+                const $prevItem = $(allItems[i]);
+                const prevItemData = $prevItem.data('item-object');
+                
+                if (prevItemData && prevItemData.type === 'header') {
+                    const prevItemIndex = parseInt($prevItem.attr('data-item-index'));
+                    const stateKey = `header_${moduleIndex}_${prevItemIndex}_collapsed`;
+                    const isCollapsed = localStorage.getItem(stateKey) === 'true';
+                    
+                    // If the header is collapsed, expand it automatically
+                    if (isCollapsed) {
+                        localStorage.removeItem(stateKey);
+                        // The syncDataAndRender will handle re-rendering with expanded state
+                    }
+                    break;
+                }
+            }
+        },
         update: function(event, ui) {
             // On any item reorder (within module or between modules), sync data and re-render
             // This handles both same-module moves and cross-module moves
@@ -1044,10 +1211,10 @@ function editModule(moduleIndex) {
 function saveModule() {
     if (editingModuleIndex === null) return;
     
-    lessonsData.modules[editingModuleIndex].title = $('#edit-title').val();
-    lessonsData.modules[editingModuleIndex].anchor = $('#edit-anchor').val();
-    lessonsData.modules[editingModuleIndex].icon = $('#edit-icon').val();
-    lessonsData.modules[editingModuleIndex].description = $('#edit-description').val();
+    lessonsData.modules[editingModuleIndex].title = $('#edit-title').val().trim();
+    lessonsData.modules[editingModuleIndex].anchor = $('#edit-anchor').val().trim();
+    lessonsData.modules[editingModuleIndex].icon = $('#edit-icon').val().trim();
+    lessonsData.modules[editingModuleIndex].description = $('#edit-description').val().trim();
     
     closeModal();
     renderModules();
@@ -1065,6 +1232,13 @@ function deleteModule(moduleIndex) {
 function addItem(moduleIndex) {
     editingItemIndex = null;
     editingModuleIndex = moduleIndex;
+    showItemModal('Add Item', getDefaultItem());
+}
+
+function addItemAfter(moduleIndex, afterItemIndex) {
+    editingItemIndex = null;
+    editingModuleIndex = moduleIndex;
+    editingAfterItemIndex = afterItemIndex;
     showItemModal('Add Item', getDefaultItem());
 }
 
@@ -1088,6 +1262,12 @@ function editItemFromButton(button) {
         editingModuleIndex = moduleIndex;
         editingItemIndex = itemIndex;
         const item = lessonsData.modules[moduleIndex].items[itemIndex];
+        // Migrate FCPX to reference if needed
+        if (item.type === 'video' && item.FCPX && !item.reference) {
+            item.reference = item.FCPX;
+            delete item.FCPX;
+            markChanged();
+        }
         showItemModal('Edit Item', item);
     }
 }
@@ -1159,6 +1339,8 @@ function updateItemFormFields(item) {
             </div>
         `;
     } else if (type === 'video') {
+        // Handle FCPX migration for display
+        const referenceValue = item.reference || item.FCPX || '';
         fieldsHtml = `
             <div class="form-group">
                 <label>Title:</label>
@@ -1171,6 +1353,10 @@ function updateItemFormFields(item) {
             <div class="form-group">
                 <label>Media:</label>
                 <input type="text" id="edit-media" value="${escapeHtml(item.media || '')}">
+            </div>
+            <div class="form-group">
+                <label>Reference:</label>
+                <input type="text" id="edit-reference" value="${escapeHtml(referenceValue)}">
             </div>
         `;
     } else if (type === 'reference') {
@@ -1223,6 +1409,13 @@ function updateItemFormFields(item) {
             <div class="form-group">
                 <label>Resource Link ID:</label>
                 <input type="text" id="edit-resource-link-id" value="${escapeHtml(item.resource_link_id || '')}">
+            </div>
+            <div class="form-group">
+                <label>Target:</label>
+                <select id="edit-target">
+                    <option value="">Default (same window)</option>
+                    <option value="_blank" ${item.target === '_blank' ? 'selected' : ''}>New Window (_blank)</option>
+                </select>
             </div>
             <div class="form-group">
                 <label>Custom Parameters:</label>
@@ -1284,36 +1477,44 @@ function saveItem() {
     if (type === 'header') {
         item = {
             type: 'header',
-            text: $('#edit-text').val(),
+            text: $('#edit-text').val().trim(),
             level: parseInt($('#edit-level').val())
         };
     } else if (type === 'video') {
+        const youtubeVal = $('#edit-youtube').val().trim();
+        const mediaVal = $('#edit-media').val().trim();
+        const referenceVal = $('#edit-reference').val().trim();
         item = {
             type: 'video',
-            title: $('#edit-title').val(),
-            youtube: $('#edit-youtube').val() || undefined,
-            media: $('#edit-media').val() || undefined
+            title: $('#edit-title').val().trim(),
+            youtube: youtubeVal || undefined,
+            media: mediaVal || undefined,
+            reference: referenceVal || undefined
         };
         // Remove undefined fields
         Object.keys(item).forEach(key => item[key] === undefined && delete item[key]);
+        // Ensure FCPX is removed if it exists (migrated to reference)
+        if (item.FCPX) {
+            delete item.FCPX;
+        }
     } else if (type === 'reference') {
         item = {
             type: 'reference',
-            title: $('#edit-title').val(),
-            href: $('#edit-href').val()
+            title: $('#edit-title').val().trim(),
+            href: $('#edit-href').val().trim()
         };
     } else if (type === 'discussion') {
         item = {
             type: 'discussion',
-            title: $('#edit-title').val(),
-            launch: $('#edit-launch').val(),
-            resource_link_id: $('#edit-resource-link-id').val()
+            title: $('#edit-title').val().trim(),
+            launch: $('#edit-launch').val().trim(),
+            resource_link_id: $('#edit-resource-link-id').val().trim()
         };
     } else if (type === 'lti') {
         const custom = [];
         $('#custom-fields-container .custom-field').each(function() {
-            const key = $(this).find('.custom-key').val();
-            const value = $(this).find('.custom-value').val();
+            const key = $(this).find('.custom-key').val().trim();
+            const value = $(this).find('.custom-value').val().trim();
             if (key && value) {
                 custom.push({ key: key, value: value });
             }
@@ -1321,10 +1522,15 @@ function saveItem() {
         
         item = {
             type: 'lti',
-            title: $('#edit-title').val(),
-            launch: $('#edit-launch').val(),
-            resource_link_id: $('#edit-resource-link-id').val()
+            title: $('#edit-title').val().trim(),
+            launch: $('#edit-launch').val().trim(),
+            resource_link_id: $('#edit-resource-link-id').val().trim()
         };
+        
+        const targetVal = $('#edit-target').val().trim();
+        if (targetVal) {
+            item.target = targetVal;
+        }
         
         if (custom.length > 0) {
             item.custom = custom;
@@ -1332,13 +1538,13 @@ function saveItem() {
     } else if (type === 'assignment') {
         item = {
             type: 'assignment',
-            href: $('#edit-href').val()
+            href: $('#edit-href').val().trim()
         };
     } else if (type === 'slide') {
         item = {
             type: 'slide',
-            title: $('#edit-title').val(),
-            href: $('#edit-href').val()
+            title: $('#edit-title').val().trim(),
+            href: $('#edit-href').val().trim()
         };
     }
     
@@ -1348,7 +1554,12 @@ function saveItem() {
         if (!lessonsData.modules[editingModuleIndex].items) {
             lessonsData.modules[editingModuleIndex].items = [];
         }
-        lessonsData.modules[editingModuleIndex].items.push(item);
+        // If editingAfterItemIndex is set, insert after that item, otherwise append to end
+        if (editingAfterItemIndex !== null) {
+            lessonsData.modules[editingModuleIndex].items.splice(editingAfterItemIndex + 1, 0, item);
+        } else {
+            lessonsData.modules[editingModuleIndex].items.push(item);
+        }
     }
     
     closeModal();
@@ -1399,10 +1610,62 @@ function toggleModule(moduleIndex) {
     }
 }
 
+function toggleHeaderSection(moduleIndex, itemIndex, event) {
+    // Prevent event from interfering with drag operations
+    if (event) {
+        event.stopPropagation();
+        event.preventDefault();
+    }
+    
+    const itemsList = $(`.items-list[data-module-index="${moduleIndex}"]`);
+    const $headerItem = itemsList.find(`.item[data-item-index="${itemIndex}"]`);
+    const $toggleButton = $headerItem.find('.header-toggle');
+    
+    // Toggle collapsed state
+    const isCollapsed = $toggleButton.hasClass('collapsed');
+    const newCollapsedState = !isCollapsed;
+    
+    // Update toggle button
+    $toggleButton.toggleClass('collapsed');
+    
+    // Find all items after this header until the next header or end
+    const allItems = itemsList.find('.item').toArray();
+    const headerIndex = allItems.indexOf($headerItem[0]);
+    
+    if (headerIndex === -1) return;
+    
+    // Show or hide items between this header and the next header
+    for (let i = headerIndex + 1; i < allItems.length; i++) {
+        const $nextItem = $(allItems[i]);
+        const nextItemData = $nextItem.data('item-object');
+        
+        // Stop at next header
+        if (nextItemData && nextItemData.type === 'header') {
+            break;
+        }
+        
+        // Toggle visibility
+        if (newCollapsedState) {
+            $nextItem.addClass('collapsed-section');
+        } else {
+            $nextItem.removeClass('collapsed-section');
+        }
+    }
+    
+    // Store state in localStorage
+    const stateKey = `header_${moduleIndex}_${itemIndex}_collapsed`;
+    if (newCollapsedState) {
+        localStorage.setItem(stateKey, 'true');
+    } else {
+        localStorage.removeItem(stateKey);
+    }
+}
+
 function closeModal() {
     $('#item-modal').hide();
     editingItemIndex = null;
     editingModuleIndex = null;
+    editingAfterItemIndex = null;
 }
 
 function saveChanges() {
@@ -1455,5 +1718,3 @@ window.onclick = function(event) {
 
 <?php
 $OUTPUT->footer();
-?>
-

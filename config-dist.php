@@ -21,7 +21,10 @@ $dirroot = realpath(dirname(__FILE__));
 
 // New for 2021 - We may need to do some tweaking before the autoloader wakes up
 // So we need to add this require to config.php before requiring autoload.php
-require_once $dirroot."/vendor/tsugi/lib/include/pre_config.php";
+
+// Prior to 21-Jan-2026, this was:
+// require_once $dirroot."/vendor/tsugi/lib/include/pre_config.php";
+require_once $dirroot."/lib/include/pre_config.php";
 
 // Activate the autoloader...
 $loader = require_once($dirroot."/vendor/autoload.php");
@@ -86,10 +89,10 @@ unset($apphome);
 // You need to point this at a database with am account and password
 // that can create tables.   To make the initial tables go into Admin
 // to run the upgrade.php script which auto-creates the tables.
-$CFG->pdo       = 'mysql:host=127.0.0.1;dbname=tsugi';
-// $CFG->pdo       = 'mysql:host=127.0.0.1;port=8889;dbname=tsugi'; // MAMP
-$CFG->dbuser    = 'ltiuser';
-$CFG->dbpass    = 'ltipassword';
+$CFG->pdo       = getenv('TSUGI_PDO') ?: 'mysql:host=127.0.0.1;dbname=tsugi';
+// $CFG->pdo       = getenv('TSUGI_PDO') ?: 'mysql:host=127.0.0.1;port=8889;dbname=tsugi'; // MAMP
+$CFG->dbuser    = getenv('TSUGI_DB_USER') ?: 'ltiuser';
+$CFG->dbpass    = getenv('TSUGI_DB_PASS') ?: 'ltipassword';
 
 // Sometimes the PDO constructor call needs additional parameters
 // $CFG->pdo_options = array(\PDO::MYSQL_ATTR_SSL_CA => './BaltimoreCyberTrustRoot.crt.pem'))
@@ -135,7 +138,7 @@ $CFG->dbprefix  = '';
 // features of this application. It can be the plaintext password
 // or a sha256 hash of the admin password.  Please don't use either
 // the 'tsugi' or the sha256 of 'tsugi' example values below.
-$CFG->adminpw = false;
+$CFG->adminpw = getenv('TSUGI_ADMIN_PW') ?: false;
 // $CFG->adminpw = 'tsugi';
 // $CFG->adminpw = 'sha256:9c0ccb0d53dd71b896cde69c78cf977acbcb36546c96bedec1619406145b5e9e';
 
@@ -272,7 +275,7 @@ $CFG->badge_assert_salt = false; // "mediumlengthhexstring";
 
 // LinkedIn organization/company page URL (optional)
 // If set, displays a LinkedIn link on badge pages
-// $CFG->badge_linkedin_url = "https://www.linkedin.com/company/py4e/";
+// $CFG->linkedin_url = "https://www.linkedin.com/company/py4e/";
 
 // This folder contains the badge images - This example
 // is for Embedded Tsugi and the badge images are in the
@@ -497,15 +500,9 @@ if ( isset($CFG->sessions_in_db) && $CFG->sessions_in_db ) {
     );
 }
 
-// The vendor include and root - generally leave these alone
-// unless you have a very custom checkout
-$CFG->vendorroot = $CFG->wwwroot."/vendor/tsugi/lib/util";
-$CFG->vendorinclude = $CFG->dirroot."/vendor/tsugi/lib/include";
-$CFG->vendorstatic = $CFG->wwwroot."/vendor/tsugi/lib/static";
-
 $CFG->lumen_storage = $CFG->dirroot."/storage/";
 
 // Leave these here
-require_once $CFG->vendorinclude."/setup.php";
-require_once $CFG->vendorinclude."/lms_lib.php";
+require_once $CFG->dirroot."/lib/include/setup.php";
+require_once $CFG->dirroot."/lib/include/lms_lib.php";
 // No trailing tag to avoid inadvertent white space
