@@ -445,6 +445,8 @@ class LTI13 {
         if ( is_array($debug_log) ) $debug_log[] = $headers;
         if ( is_array($debug_log) ) $debug_log[] = $grade_call;
 
+        self::setUserAgentCurl($ch); // Set the User-Agent header
+
         $line_item = curl_exec($ch);
         if ( $line_item === false ) return self::handle_curl_error($ch, $debug_log);
 
@@ -494,6 +496,8 @@ class LTI13 {
 
         if ( is_array($debug_log) ) $debug_log[] = $membership_url;
         if ( is_array($debug_log) ) $debug_log[] = $headers;
+
+        self::setUserAgentCurl($ch); // Set the User-Agent header
 
         $membership = curl_exec($ch);
         if ( $membership === false ) return self::handle_curl_error($ch, $debug_log);
@@ -557,6 +561,8 @@ class LTI13 {
         if (is_array($debug_log) ) $debug_log[] = 'Line Items URL: '.$lineitems_url;
         if (is_array($debug_log) ) $debug_log[] = $headers;
 
+        self::setUserAgentCurl($ch); // Set the User-Agent header
+
         $lineitems = curl_exec($ch);
         if ( $lineitems === false ) return self::handle_curl_error($ch, $debug_log);
 
@@ -608,6 +614,8 @@ class LTI13 {
 
         if (is_array($debug_log) ) $debug_log[] = 'Line Items URL: '.$lineitem_url;
         if (is_array($debug_log) ) $debug_log[] = $headers;
+
+        self::setUserAgentCurl($ch); // Set the User-Agent header
 
         $lineitem = curl_exec($ch);
         if ( $lineitem === false ) return self::handle_curl_error($ch, $debug_log);
@@ -665,6 +673,8 @@ class LTI13 {
 
         if (is_array($debug_log) ) $debug_log[] = 'Line Items URL: '.$actual_url;
         if (is_array($debug_log) ) $debug_log[] = $headers;
+
+        self::setUserAgentCurl($ch); // Set the User-Agent header
 
         $results = curl_exec($ch);
         if ( $results === false ) return self::handle_curl_error($ch, $debug_log);
@@ -726,6 +736,8 @@ class LTI13 {
 
         if (is_array($debug_log) ) $debug_log[] = 'Line Item URL: '.$lineitem_url;
         if (is_array($debug_log) ) $debug_log[] = $headers;
+
+        self::setUserAgentCurl($ch); // Set the User-Agent header
 
         $response = curl_exec($ch);
         if ( $response === false ) return self::handle_curl_error($ch, $debug_log);
@@ -795,6 +807,8 @@ class LTI13 {
         if (is_array($debug_log) ) $debug_log[] = 'Line Items URL: '.$lineitems_url;
         if (is_array($debug_log) ) $debug_log[] = $headers;
 
+        self::setUserAgentCurl($ch); // Set the User-Agent header
+
         $line_item = curl_exec($ch);
         if ( $line_item === false ) return self::handle_curl_error($ch, $debug_log);
 
@@ -863,6 +877,8 @@ class LTI13 {
 
         if (is_array($debug_log) ) $debug_log[] = 'Line Item URL: '.$lineitem_url;
         if (is_array($debug_log) ) $debug_log[] = $headers;
+
+        self::setUserAgentCurl($ch); // Set the User-Agent header
 
         $line_item = curl_exec($ch);
         if ( $line_item === false ) return self::handle_curl_error($ch, $debug_log);
@@ -946,6 +962,8 @@ class LTI13 {
         if ( is_array($debug_log) ) $debug_log[] = $auth_request;
         if ( is_array($debug_log) ) $debug_log[] = "Post Data:";
         if ( is_array($debug_log) ) $debug_log[] = $query;
+
+        self::setUserAgentCurl($ch); // Set the User-Agent header
 
         $token_str = curl_exec($ch);
         if ( $token_str === false ) {
@@ -1300,4 +1318,19 @@ class LTI13 {
         return null;
     }
 
+    public static function setUserAgentCurl($ch)
+    {
+        global $CFG;
+
+        // Construct a robust default User-Agent
+        $default_agent = 'Tsugi/' .
+            (defined('TSUGI_VERSION') ? TSUGI_VERSION : 'dev') .
+            ' (' . (isset($CFG->wwwroot) ? $CFG->wwwroot : 'https://www.tsugi.org') . ')' .
+            ' PHP/' . phpversion();
+
+        // Allow overrides via extension mechanism
+        $user_agent = $CFG->getExtension('user_agent', $default_agent);
+
+        curl_setopt($ch, CURLOPT_USERAGENT, $user_agent);
+    }
 }
